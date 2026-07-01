@@ -4,7 +4,7 @@ extends EditorImportPlugin
 ##
 ## 监听 PNG 文件，检测同名 JSON 后自动生成 SpriteData.tres 资源。
 
-const SpriteDataClass = preload("res://resources/sprites/sprite_data.gd")
+const SpriteDataClass = preload("res://addons/sprite_importer/sprite_data.gd")
 
 
 # ============================================================
@@ -108,7 +108,7 @@ func _import(
 		return ERR_FILE_CANT_OPEN
 
 	# 5. 构建 SpriteData
-	var sprite_data := SpriteDataClass.new()
+	var sprite_data = SpriteDataClass.new()
 	sprite_data.atlas_path = source_file
 	sprite_data.grid_size = grid
 	sprite_data.direction_names = dir_names
