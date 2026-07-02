@@ -110,46 +110,46 @@
 {
   "version": "1.0",
   "meta": {
-    "name": "enemy_soldier"       // 图集名称
+	"name": "enemy_soldier"       // 图集名称
   },
   "atlas": {
-    "grid_size": [64, 64],        // 单位网格尺寸
-    "directions": 4,              // 朝向数量
-    "direction_names": ["N","E","S","W"]
+	"grid_size": [64, 64],        // 单位网格尺寸
+	"directions": 4,              // 朝向数量
+	"direction_names": ["N","E","S","W"]
   },
   "states": {
-    "_default": {                 // 始终存在，回退用
-      "row": 0, "start_col": 0
-    },
-    "idle": {                     // 无朝向静态状态
-      "row": 0, "start_col": 1,
-      "frames": 1                 // 帧数=1 时省略
-    },
-    "walk": {                     // 有朝向动画状态
-      "directions": {
-        "N": {"row": 0, "start_col": 2, "frames": 4},
-        "E": {"row": 0, "start_col": 6, "frames": 4},
-        "S": {                    // 镜像方向：复用 N，水平翻转
-          "mirror": "N",
-          "row": 0, "start_col": 2,
-          "frames": 4,
-          "flip_h": true
-        },
-        "W": {"mirror": "E", "row": 0, "start_col": 6, "frames": 4, "flip_h": true}
-      },
-      "fps": 8, "loop": true
-    }
+	"_default": {                 // 始终存在，回退用
+	  "row": 0, "start_col": 0
+	},
+	"idle": {                     // 无朝向静态状态
+	  "row": 0, "start_col": 1,
+	  "frames": 1                 // 帧数=1 时省略
+	},
+	"walk": {                     // 有朝向动画状态
+	  "directions": {
+		"N": {"row": 0, "start_col": 2, "frames": 4},
+		"E": {"row": 0, "start_col": 6, "frames": 4},
+		"S": {                    // 镜像方向：复用 N，水平翻转
+		  "mirror": "N",
+		  "row": 0, "start_col": 2,
+		  "frames": 4,
+		  "flip_h": true
+		},
+		"W": {"mirror": "E", "row": 0, "start_col": 6, "frames": 4, "flip_h": true}
+	  },
+	  "fps": 8, "loop": true
+	}
   },
   "variants": {
-    "_default": {                 // 始终存在
-      "tile_offset": 0, "weight": 0
-    },
-    "elite": {
-      "tile_offset": 5, "weight": 3, "tint": "#ffcccc"
-    }
+	"_default": {                 // 始终存在
+	  "tile_offset": 0, "weight": 0
+	},
+	"elite": {
+	  "tile_offset": 5, "weight": 3, "tint": "#ffcccc"
+	}
   },
   "render": {
-    "is_double_height": false     // 切图时高度是否 ×2
+	"is_double_height": false     // 切图时高度是否 ×2
   }
 }
 ```
@@ -204,6 +204,40 @@ sd.get_flip("idle", "S")          # → {"h": true, "v": false}
 sd.is_double_height               # → true（双倍高度实体）
 ```
 
+### SpriteDataHelper（推荐）
+
+插件仓库附带了 `scripts/utils/sprite_data_helper.gd` 辅助工具，封装方向映射、镜像解析、fallback 等逻辑：
+
+```gdscript
+var helper := SpriteDataHelper.new(sprite_data)
+
+# Direction 枚举 → 方向名映射
+var frames := helper.build_sprite_frames("idle", GlobalEnums.Direction.SOUTH)
+animated_sprite.sprite_frames = frames
+animated_sprite.flip_h = helper.get_flip("idle", GlobalEnums.Direction.SOUTH)["h"]
+
+# 查询帧数（自动处理镜像方向）
+helper.get_frame_count("walk", GlobalEnums.Direction.EAST)
+```
+
+---
+
+## 运行时使用
+
+### 手动使用（自定义渲染器）
+
+```gdscript
+var helper := SpriteDataHelper.new(sprite_data)
+
+# 状态切换
+func set_state(state_name: String) -> void:
+	var frames := helper.build_sprite_frames(state_name, facing, variant)
+	sprite.sprite_frames = frames
+	sprite.play("default")
+	var flip := helper.get_flip(state_name, facing)
+	sprite.flip_h = flip["h"]
+```
+
 ---
 
 ## 文件结构
@@ -212,13 +246,11 @@ sd.is_double_height               # → true（双倍高度实体）
 addons/sprite_importer/
 ├── plugin.cfg                  # 插件注册
 ├── plugin.gd                   # EditorPlugin 入口 + 项目设置注册
-├── sprite_sheet_editor.gd      # 编辑器配置面板（~900 行）
+├── sprite_sheet_editor.gd      # 编辑器配置面板
 ├── import_plugin.gd            # EditorImportPlugin 自动导入
 ├── atlas_generator.gd          # 空图集生成器（含 5×7 位图字体 + 区分色标注）
-└── sprite_data.gd              # SpriteData 资源类（运行时查询，已内置插件中）
-
-scripts/utils/
-└── sprite_data_helper.gd       # SpriteDataHelper 辅助工具（方向映射 + 镜像解析 + SpriteFrames 构建）
+├── sprite_data.gd              # SpriteData 资源类（运行时查询）
+└── sprite_data_helper.gd       # SpriteDataHelper 辅助工具（方向映射 + 镜像解析 + SpriteFrames 构建，零项目依赖）
 ```
 
 ---
