@@ -124,92 +124,115 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 
 	var max_chars_per_line := max(1, (tile_w - 4) / (_CHAR_W + _CHAR_SPACING))
 
-	# ---- 连续密排：状态+变体 全部按格子流式排列，按项目设置宽度换行 ----
+	# ---- 按 JSON 坐标精准绘制（与导入插件读取坐标一致）----
 	var max_atlas_w: int = ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024)
 	var cols_per_row: int = max(1, max_atlas_w / tile_w)
+
+	# 第一遍：收集图块 + 计算图集尺寸
 	var tile_list: Array[Dictionary] = []
+	var max_col: int = 0
+	var max_row: int = 0
 
-	# 第一遍：收集所有图块信息（变体优先：变体0全部状态 → 变体1全部状态 → ...）
-	for vi in range(variant_names.size()):
-		var vname: String = variant_names[vi]
-		for state_name: String in states:
-			var sd: Dictionary = states[state_name]
-			if sd.has("directions"):
-				var mirror_sources: Dictionary = {}
-				for dn: String in dir_names:
-					if not sd["directions"].has(dn):
-						continue
-					var dd: Dictionary = sd["directions"][dn]
-					if dd.has("mirror"):
-						var src: String = dd["mirror"]
-						if not mirror_sources.has(src):
-							mirror_sources[src] = []
-						mirror_sources[src].append({"dir": dn, "fh": dd.get("flip_h", false), "fv": dd.get("flip_v", false)})
+	for state_name: String in states:
+		var sd: Dictionary = states[state_name]
+		if sd.has("directions"):
+			var mirror_sources: Dictionary = {}
+			for dn: String in dir_names:
+				if not sd["directions"].has(dn):
+					continue
+				var dd: Dictionary = sd["directions"][dn]
+				if dd.has("mirror"):
+					var src: String = dd["mirror"]
+					if not mirror_sources.has(src):
+						mirror_sources[src] = []
+					mirror_sources[src].append({"dir": dn, "fh": dd.get("flip_h", false), "fv": dd.get("flip_v", false)})
 
-				for dn: String in dir_names:
-					if not sd["directions"].has(dn):
-						continue
-					var dd: Dictionary = sd["directions"][dn]
-					if dd.has("mirror"):
-						continue
-					var frames: int = dd.get("frames", 1)
-					for fi in range(frames):
-						var mirror_info := ""
-						if mirror_sources.has(dn):
-							for ms in mirror_sources[dn]:
-								var m := "<-%s" % ms["dir"]
-								if ms["fh"] or ms["fv"]:
-									if ms["fh"]: m += "H"
-									if ms["fv"]: m += "V"
-								if mirror_info != "": mirror_info += " "
-								mirror_info += m
+			for dn: String in dir_names:
+				if not sd["directions"].has(dn):
+					continue
+				var dd: Dictionary = sd["directions"][dn]
+				if dd.has("mirror"):
+					continue
+				var frames: int = dd.get("frames", 1)
+				var start_col: int = dd.get("start_col", 0)
+				var row: int = dd.get("row", 0)
+
+				var mirror_info := ""
+				if mirror_sources.has(dn):
+					for ms in mirror_sources[dn]:
+						var m := "<-%s" % ms["dir"]
+						if ms["fh"] or ms["fv"]:
+							if ms["fh"]: m += "H"
+							if ms["fv"]: m += "V"
+						if mirror_info != "": mirror_info += " "
+						mirror_info += m
+
+				for fi in range(frames):
+					var flat_col: int = start_col + fi
+					var col: int = flat_col % cols_per_row
+					var frame_row: int = row + flat_col / cols_per_row
+					max_col = max(max_col, col)
+					max_row = max(max_row, frame_row)
+					for vn: String in variant_names:
+						var vd: Dictionary = variants.get(vn, {})
+						var voffset: int = vd.get("tile_offset", 0)
+						var fc: int = col + voffset
+						var fr: int = frame_row + fc / cols_per_row
+						fc = fc % cols_per_row
 						tile_list.append({
+							"col": fc,
+							"row": fr,
 							"state": state_name,
-							"variant": vname,
+							"variant": vn,
 							"dir": dn,
 							"frame": fi,
 							"mirror": mirror_info,
-							"label": "%s_%s_%s_f%d_%s" % [atlas_name, state_name, dn, fi, vname.to_upper()],
+							"label": "%s_%s_%s_f%d_%s" % [atlas_name, state_name, dn, fi, vn.to_upper()],
 						})
-			else:
-				var frames: int = sd.get("frames", 1)
-				for fi in range(frames):
+		else:
+			var frames: int = sd.get("frames", 1)
+			var start_col: int = sd.get("start_col", 0)
+			var row: int = sd.get("row", 0)
+			for fi in range(frames):
+				var flat_col: int = start_col + fi
+				var col: int = flat_col % cols_per_row
+				var frame_row: int = row + flat_col / cols_per_row
+				max_col = max(max_col, col)
+				max_row = max(max_row, frame_row)
+				for vn: String in variant_names:
+					var vd: Dictionary = variants.get(vn, {})
+					var voffset: int = vd.get("tile_offset", 0)
+					var fc: int = col + voffset
+					var fr: int = frame_row + fc / cols_per_row
+					fc = fc % cols_per_row
 					tile_list.append({
+						"col": fc,
+						"row": fr,
 						"state": state_name,
-						"variant": vname,
+						"variant": vn,
 						"dir": "",
 						"frame": fi,
 						"mirror": "",
-						"label": "%s_%s_f%d_%s" % [atlas_name, state_name, fi, vname.to_upper()],
+						"label": "%s_%s_f%d_%s" % [atlas_name, state_name, fi, vn.to_upper()],
 					})
 
 	if tile_list.size() == 0:
 		push_error("[AtlasGenerator] 无图块可绘制")
 		return ERR_INVALID_DATA
 
-	# 计算图集尺寸
-	var total_tiles_count := tile_list.size()
-	var atlas_rows: int = ceili(float(total_tiles_count) / cols_per_row)
-	var atlas_w: int = min(total_tiles_count, cols_per_row) * tile_w
-	var atlas_h: int = atlas_rows * tile_h
+	# 计算图集尺寸（宽度始终取项目设定值，右侧可有空列）
+	var atlas_w: int = max_atlas_w
+	var atlas_h: int = (max_row + 1) * tile_h
 
 	var img := Image.create(atlas_w, atlas_h, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0.14, 0.14, 0.18, 1.0))
 
-	# 第二遍：连续绘制
+	# 第二遍：在 JSON 坐标处精准绘制
 	var _prev_state := ""
 	var _prev_dir := ""
-	var _dir_index := 0  # 当前状态内的方向序号（0-based）
+	var _dir_index := 0
 	for ti in range(tile_list.size()):
 		var tile: Dictionary = tile_list[ti]
-		var col: int = ti % cols_per_row
-		var row: int = ti / cols_per_row
-		var cx: int = col * tile_w
-		var cy: int = row * tile_h
-
-		var is_new_variant: bool = true
-		if ti > 0:
-			is_new_variant = tile["variant"] != tile_list[ti - 1]["variant"]
 
 		# 计算状态内方向序号
 		if tile["dir"] == "":
@@ -221,9 +244,17 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 		_prev_state = tile["state"]
 		_prev_dir = tile["dir"]
 
+		# 变体检测
+		var is_new_variant: bool = true
+		if ti > 0:
+			is_new_variant = tile["variant"] != tile_list[ti - 1]["variant"]
+
+		# 精准坐标
+		var cx: int = tile["col"] * tile_w
+		var cy: int = tile["row"] * tile_h
+
 		# 边框颜色 → 状态名
 		var state_color := _name_to_color(tile["state"])
-
 		# 小方框颜色 → 变体名
 		var variant_color := _name_to_color(tile["variant"])
 
@@ -235,7 +266,7 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 		_draw_cell_border(img, cx, cy, tile_w, tile_h, state_color)
 		_draw_wrapped_label(img, cx + 2, cy + 2, tile["label"], max_chars_per_line, Color(0.85, 0.88, 0.92))
 
-		# 右下角堆叠空心方框 → 第 N 个方向画 N+1 个方框（距边缘 3px，间距 1px）
+		# 右下角堆叠空心方框
 		var dot_x := cx + tile_w - 8
 		var dot_y := cy + tile_h - 8
 		var count := _dir_index + 1

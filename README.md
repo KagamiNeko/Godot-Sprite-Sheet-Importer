@@ -154,7 +154,7 @@
 }
 ```
 
-> **坐标系统**：所有图块展开为扁平序列，`row` / `start_col` 为 1024px 限宽下的网格坐标。`tile_offset` 为变体的全局图块偏移。
+> **坐标系统**：所有图块逐帧平铺为扁平序列，`row` / `start_col` 由编辑器自动计算。超出 `max_atlas_width` 时自动换行，同方向帧可跨行拆分以紧密填满。变体通过 `tile_offset` 全局偏移。
 
 ---
 
@@ -163,9 +163,12 @@
 点击"生成空图集"按钮后，根据当前配置生成一张 PNG：
 
 - 每个图块左上角标注 `图集名_状态_方向_帧_变体`
+- 图块边框按**状态名**着色，同状态同色系
+- 右下角堆叠**5×5 空心方框**，按变体名着色，第 N 个方向堆 N+1 个
 - 镜像源图块底部标注 `<-方向:翻转`
-- 变体之间以 1px 竖线分隔
-- 最大宽度 1024px，超宽自动换行
+- 变体切换处以 1px 变体色竖线分隔
+- 宽度由项目设置 `sprite_importer/max_atlas_width` 决定（默认 1024px）
+- 逐帧紧密平铺，同方向帧可跨行拆分以填满宽度
 - 内置 5×7 像素字体，不依赖系统字体
 
 美术拿到空图集后，直接在对应图格内替换为实际素材即可。
@@ -176,7 +179,13 @@
 
 PNG 文件如果有同名 JSON，导入插件会自动生成 `SpriteData.tres`。
 
-在 Import dock 中将"导入为"切换为 `Sprite Sheet`，然后 Reimport。
+> **注意**：将 PNG 拖入 `SpriteData` 字段即可，Godot 的导入系统会自动解析为导入后的资源，无需手动指定 `.tres` 路径。
+
+### 项目设置
+
+| 设置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `sprite_importer/max_atlas_width` | 1024 | 图集最大宽度（px），超宽自动换行 |
 
 ### 运行时查询
 
@@ -192,40 +201,54 @@ sd.get_fps("walk")                # → 8
 sd.is_looping("walk")             # → true
 sd.is_mirror("idle", "S")         # → true
 sd.get_flip("idle", "S")          # → {"h": true, "v": false}
+sd.is_double_height               # → true（双倍高度实体）
+```
+
+### SpriteDataHelper（推荐）
+
+插件仓库附带了 `scripts/utils/sprite_data_helper.gd` 辅助工具，封装方向映射、镜像解析、fallback 等逻辑：
+
+```gdscript
+var helper := SpriteDataHelper.new(sprite_data)
+
+# Direction 枚举 → 方向名映射
+var frames := helper.build_sprite_frames("idle", GlobalEnums.Direction.SOUTH)
+animated_sprite.sprite_frames = frames
+animated_sprite.flip_h = helper.get_flip("idle", GlobalEnums.Direction.SOUTH)["h"]
+
+# 查询帧数（自动处理镜像方向）
+helper.get_frame_count("walk", GlobalEnums.Direction.EAST)
 ```
 
 ---
 
 ## 运行时使用
 
-### 配合现有实体系统
+### 配合 AnimateComponent
 
-在 Entity 的 `AnimateComponent` 或自定义 `SpriteRenderer` 中：
+在 `EntityConfig` 中将 `SpriteData` 拖入 `sprite_data` 字段即可，`AnimateComponent` 自动切换：
 
 ```gdscript
-# 加载贴图数据
-var sprite_data: SpriteData = load("res://sprites/" + config.sprite_name + ".png")
+# AnimateComponent API
+var anim := entity.get_component("Animate Component") as AnimateComponent
+
+anim.play_animation("walk")                          # 切换状态
+anim.set_direction(GlobalEnums.Direction.EAST)       # 切换朝向
+anim.set_variant("elite")                            # 切换变体
+```
+
+### 手动使用（自定义渲染器）
+
+```gdscript
+var helper := SpriteDataHelper.new(sprite_data)
 
 # 状态切换
 func set_state(state_name: String) -> void:
-    current_state = state_name
-    current_frame = 0
-    _update_texture()
-
-# 朝向变更
-func set_facing(dir: String) -> void:
-    facing = dir
-    _update_texture()
-
-# 帧更新
-func _update_texture() -> void:
-    var frame := sprite_data.get_frame(current_state, facing, current_frame, current_variant)
-    if frame:
-        texture = frame
-        if sprite_data.is_mirror(current_state, facing):
-            var flip := sprite_data.get_flip(current_state, facing)
-            flip_h = flip["h"]
-            flip_v = flip["v"]
+    var frames := helper.build_sprite_frames(state_name, facing, variant)
+    sprite.sprite_frames = frames
+    sprite.play("default")
+    var flip := helper.get_flip(state_name, facing)
+    sprite.flip_h = flip["h"]
 ```
 
 ---
@@ -235,13 +258,14 @@ func _update_texture() -> void:
 ```
 addons/sprite_importer/
 ├── plugin.cfg                  # 插件注册
-├── plugin.gd                   # EditorPlugin 入口
-├── sprite_sheet_editor.gd      # 编辑器配置面板 (~900 行)
+├── plugin.gd                   # EditorPlugin 入口 + 项目设置注册
+├── sprite_sheet_editor.gd      # 编辑器配置面板（~900 行）
 ├── import_plugin.gd            # EditorImportPlugin 自动导入
-└── atlas_generator.gd          # 空图集生成器（含 5×7 位图字体）
+├── atlas_generator.gd          # 空图集生成器（含 5×7 位图字体 + 区分色标注）
+└── sprite_data.gd              # SpriteData 资源类（运行时查询，已内置插件中）
 
-resources/sprites/
-└── sprite_data.gd              # SpriteData 资源类（运行时查询）
+scripts/utils/
+└── sprite_data_helper.gd       # SpriteDataHelper 辅助工具（方向映射 + 镜像解析 + SpriteFrames 构建）
 ```
 
 ---

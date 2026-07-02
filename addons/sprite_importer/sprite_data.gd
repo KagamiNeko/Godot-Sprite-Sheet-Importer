@@ -11,6 +11,8 @@ extends Resource
 
 ## 图集纹理路径（运行时自动加载）
 @export var atlas_path: String = ""
+## 图集纹理（导入时直接存入，绕过 load() 的导入循环）
+@export var atlas_texture: Texture2D = null
 ## 单位网格尺寸（像素）
 @export var grid_size: Vector2i = Vector2i(64, 64)
 ## 朝向名称列表
@@ -53,14 +55,22 @@ func _ensure_atlas() -> void:
 
 ## 获取指定状态/朝向/帧/变体的贴图
 func get_frame(state: StringName, direction: StringName, frame_idx: int, variant: StringName = "_default") -> AtlasTexture:
-	var key := "%s_%s_%d_%s" % [state, direction, frame_idx, variant]
+	var sd: Dictionary = states.get(state, {})
+	# 无方向定义的状态，帧 key 不含方向名
+	var dir_key: String = direction
+	if not sd.has("directions"):
+		dir_key = ""
+	var key := "%s_%s_%d_%s" % [state, dir_key, frame_idx, variant]
 	if not frames.has(key):
 		return null
 	var at: AtlasTexture = frames[key]
 	if at.atlas == null:
-		var tex := get_atlas()
-		if tex:
-			at.atlas = tex
+		if atlas_texture:
+			at.atlas = atlas_texture
+		else:
+			var tex := get_atlas()
+			if tex:
+				at.atlas = tex
 	return at
 
 

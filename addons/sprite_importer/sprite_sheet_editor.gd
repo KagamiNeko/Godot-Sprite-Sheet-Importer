@@ -1002,8 +1002,8 @@ func _auto_layout_states() -> void:
 		dir_names.append(dn.strip_edges() if dn is String else str(dn))
 
 	var grid_w: int = _data["atlas"]["grid_size"][0]
-	const MAX_ATLAS_W := 1024
-	var cols_per_row: int = max(1, MAX_ATLAS_W / grid_w)
+	var max_atlas_w: int = ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024)
+	var cols_per_row: int = max(1, max_atlas_w / grid_w)
 
 	var variants: Dictionary = _data["variants"]
 	var var_names: Array = variants.keys()
@@ -1021,7 +1021,7 @@ func _auto_layout_states() -> void:
 			ordered_states[key] = _data["states"][key]
 	_data["states"] = ordered_states
 
-	# 仅以第一个变体为基准分配坐标
+	# 逐帧平铺：每帧占一个槽位，满宽度换行（不强制同方向帧连续）
 	var flat_index: int = 0
 	for state_name: String in _data["states"]:
 		var state_def: Dictionary = _data["states"][state_name]

@@ -100,16 +100,18 @@ func _import(
 	if variants.size() == 0:
 		variants = {"_default": {"tile_offset": 0, "weight": 0}}
 
-	# 4. 用 PNG 路径作为图集路径
+	# 4. 加载原始图集纹理（绕过资源系统，避免导入循环）
 	var global_path := ProjectSettings.globalize_path(source_file)
 	var img := Image.load_from_file(global_path)
 	if img == null:
 		printerr("[SpriteImporter] 无法加载纹理: ", source_file)
 		return ERR_FILE_CANT_OPEN
+	var atlas_tex := ImageTexture.create_from_image(img)
 
 	# 5. 构建 SpriteData
 	var sprite_data = SpriteDataClass.new()
 	sprite_data.atlas_path = source_file
+	sprite_data.atlas_texture = atlas_tex
 	sprite_data.grid_size = grid
 	sprite_data.direction_names = dir_names
 	sprite_data.is_double_height = is_double
@@ -117,8 +119,9 @@ func _import(
 	sprite_data.variants = variants.duplicate(true)
 
 	var tile_h: int = grid.y * (2 if is_double else 1)
+	var cols_per_row: int = max(1, ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024) / grid.x)
 
-	# 6. 预建所有 AtlasTexture 帧（atlas 引用留空，运行时由 _ensure_atlas 填充）
+	# 6. 预建所有 AtlasTexture 帧（支持逐帧跨行换行）
 	for state_name: String in states:
 		var sd: Dictionary = states[state_name]
 		for vn: String in variants:
@@ -134,19 +137,25 @@ func _import(
 						continue
 					var frames: int = dd.get("frames", 1)
 					var start_col: int = dd.get("start_col", 0)
+					var start_row: int = dd.get("row", 0)
 					for fi in range(frames):
-						var col: int = offset + start_col + fi
+						var flat_col: int = offset + start_col + fi
+						var col: int = flat_col % cols_per_row
+						var frame_row: int = start_row + flat_col / cols_per_row
 						var at := AtlasTexture.new()
-						at.region = Rect2(col * grid.x, dd.get("row", 0) * tile_h, grid.x, tile_h)
+						at.region = Rect2(col * grid.x, frame_row * tile_h, grid.x, tile_h)
 						var key := "%s_%s_%d_%s" % [state_name, dn, fi, vn]
 						sprite_data.frames[key] = at
 			else:
 				var frames: int = sd.get("frames", 1)
 				var start_col: int = sd.get("start_col", 0)
+				var start_row: int = sd.get("row", 0)
 				for fi in range(frames):
-					var col: int = offset + start_col + fi
+					var flat_col: int = offset + start_col + fi
+					var col: int = flat_col % cols_per_row
+					var frame_row: int = start_row + flat_col / cols_per_row
 					var at := AtlasTexture.new()
-					at.region = Rect2(col * grid.x, sd.get("row", 0) * tile_h, grid.x, tile_h)
+					at.region = Rect2(col * grid.x, frame_row * tile_h, grid.x, tile_h)
 					var key := "%s__%d_%s" % [state_name, fi, vn]
 					sprite_data.frames[key] = at
 
