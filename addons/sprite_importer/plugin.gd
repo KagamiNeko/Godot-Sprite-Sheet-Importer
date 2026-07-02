@@ -13,6 +13,9 @@ var _import_plugin: EditorImportPlugin = null
 
 
 func _enter_tree() -> void:
+	# 注册项目设置
+	_register_project_settings()
+
 	_dock = SpriteSheetEditorClass.new()
 	_dock.name = "Sprite Importer"
 	_dock.plugin = self
@@ -25,6 +28,20 @@ func _enter_tree() -> void:
 		print("[SpriteImporter] 导入插件已注册")
 	else:
 		printerr("[SpriteImporter] 导入插件创建失败")
+
+
+func _register_project_settings() -> void:
+	var setting_name := "sprite_importer/max_atlas_width"
+	if not ProjectSettings.has_setting(setting_name):
+		ProjectSettings.set_setting(setting_name, 1024)
+	ProjectSettings.set_initial_value(setting_name, 1024)
+	ProjectSettings.add_property_info({
+		"name": setting_name,
+		"type": TYPE_INT,
+		"hint": PROPERTY_HINT_RANGE,
+		"hint_string": "64,4096,64"
+	})
+	ProjectSettings.set_as_basic(setting_name, true)
 
 
 func _exit_tree() -> void:

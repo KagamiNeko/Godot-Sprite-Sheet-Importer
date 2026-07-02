@@ -542,6 +542,14 @@ func _sync_atlas_from_ui() -> void:
 
 func _sync_atlas_to_ui() -> void:
 	var atlas: Dictionary = _data["atlas"]
+
+	# 临时阻断信号，避免批量设值时多次触发数据回写，
+	# 防止加载 JSON 时 _data["render"]["is_double_height"] 被中间态覆盖
+	_grid_w_spin.set_block_signals(true)
+	_grid_h_spin.set_block_signals(true)
+	_dir_count_spin.set_block_signals(true)
+	_dir_names_line.set_block_signals(true)
+
 	_grid_w_spin.value = atlas["grid_size"][0]
 	_grid_h_spin.value = atlas["grid_size"][1]
 	_dir_count_spin.value = atlas["directions"]
@@ -551,6 +559,12 @@ func _sync_atlas_to_ui() -> void:
 	else:
 		_dir_names_line.text = ""
 	_atlas_name_line.text = _data.get("meta", {}).get("name", "")
+
+	_grid_w_spin.set_block_signals(false)
+	_grid_h_spin.set_block_signals(false)
+	_dir_count_spin.set_block_signals(false)
+	_dir_names_line.set_block_signals(false)
+
 	_update_effective_size_label()
 
 

@@ -124,9 +124,9 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 
 	var max_chars_per_line := max(1, (tile_w - 4) / (_CHAR_W + _CHAR_SPACING))
 
-	# ---- 连续密排：状态+变体 全部按格子流式排列，1024px 换行 ----
-	const MAX_ATLAS_W := 1024
-	var cols_per_row: int = max(1, MAX_ATLAS_W / tile_w)
+	# ---- 连续密排：状态+变体 全部按格子流式排列，按项目设置宽度换行 ----
+	var max_atlas_w: int = ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024)
+	var cols_per_row: int = max(1, max_atlas_w / tile_w)
 	var tile_list: Array[Dictionary] = []
 
 	# 第一遍：收集所有图块信息（变体优先：变体0全部状态 → 变体1全部状态 → ...）
@@ -197,6 +197,9 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 	img.fill(Color(0.14, 0.14, 0.18, 1.0))
 
 	# 第二遍：连续绘制
+	var _prev_state := ""
+	var _prev_dir := ""
+	var _dir_index := 0  # 当前状态内的方向序号（0-based）
 	for ti in range(tile_list.size()):
 		var tile: Dictionary = tile_list[ti]
 		var col: int = ti % cols_per_row
@@ -204,17 +207,40 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 		var cx: int = col * tile_w
 		var cy: int = row * tile_h
 
-		var is_new_variant: bool = false
+		var is_new_variant: bool = true
 		if ti > 0:
 			is_new_variant = tile["variant"] != tile_list[ti - 1]["variant"]
-		else:
-			is_new_variant = true
 
+		# 计算状态内方向序号
+		if tile["dir"] == "":
+			_dir_index = 0
+		elif tile["state"] != _prev_state:
+			_dir_index = 0
+		elif tile["dir"] != _prev_dir:
+			_dir_index += 1
+		_prev_state = tile["state"]
+		_prev_dir = tile["dir"]
+
+		# 边框颜色 → 状态名
+		var state_color := _name_to_color(tile["state"])
+
+		# 小方框颜色 → 变体名
+		var variant_color := _name_to_color(tile["variant"])
+
+		# 变体分隔线
 		if is_new_variant:
-			img.fill_rect(Rect2i(cx, cy, 1, tile_h), Color(0.5, 0.4, 0.2))
+			img.fill_rect(Rect2i(cx, cy, 1, tile_h), variant_color.lightened(0.15))
 
-		_draw_cell_border(img, cx, cy, tile_w, tile_h, Color(0.25, 0.28, 0.35))
-		_draw_wrapped_label(img, cx + 2, cy + 2, tile["label"], max_chars_per_line, Color(0.75, 0.8, 0.88))
+		# 状态色边框
+		_draw_cell_border(img, cx, cy, tile_w, tile_h, state_color)
+		_draw_wrapped_label(img, cx + 2, cy + 2, tile["label"], max_chars_per_line, Color(0.85, 0.88, 0.92))
+
+		# 右下角堆叠空心方框 → 第 N 个方向画 N+1 个方框（距边缘 3px，间距 1px）
+		var dot_x := cx + tile_w - 8
+		var dot_y := cy + tile_h - 8
+		var count := _dir_index + 1
+		for i in range(count):
+			_draw_hollow_rect(img, dot_x, dot_y - i * 6, 5, 5, variant_color)
 
 		if tile["mirror"] != "":
 			var bottom_y := cy + tile_h - _CHAR_H - 2
@@ -227,6 +253,16 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 	else:
 		push_error("[AtlasGenerator] 保存失败: %s" % png_path)
 	return err
+
+
+## 根据名称生成稳定的区分颜色（用于状态/变体边框）
+## 使用黄金比例分布色相，同名字始终得到相同颜色
+static func _name_to_color(name: String) -> Color:
+	var h := float(name.hash()) / float(0xFFFFFFFF)
+	h = fmod(abs(h) * 1.61803398875, 1.0)  # 黄金比例分布
+	var s := 0.45 + fmod(h * 3.7, 0.35)     # 0.45 ~ 0.8
+	var v := 0.45 + fmod(h * 5.3, 0.25)     # 0.45 ~ 0.7
+	return Color.from_hsv(h, s, v)
 
 
 ## 在图集中绘制换行标签
@@ -273,4 +309,14 @@ static func _draw_cell_border(img: Image, x: int, y: int, w: int, h: int, color:
 		img.set_pixel(x, y + i, color)
 	# 右边
 	for i in range(h):
+		img.set_pixel(x + w - 1, y + i, color)
+
+
+## 绘制 1px 空心矩形框
+static func _draw_hollow_rect(img: Image, x: int, y: int, w: int, h: int, color: Color) -> void:
+	for i in range(w):
+		img.set_pixel(x + i, y, color)
+		img.set_pixel(x + i, y + h - 1, color)
+	for i in range(1, h - 1):
+		img.set_pixel(x, y + i, color)
 		img.set_pixel(x + w - 1, y + i, color)
