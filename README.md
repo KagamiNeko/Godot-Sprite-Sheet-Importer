@@ -224,20 +224,7 @@ helper.get_frame_count("walk", GlobalEnums.Direction.EAST)
 
 ## 运行时使用
 
-### 配合 AnimateComponent
-
-在 `EntityConfig` 中将 `SpriteData` 拖入 `sprite_data` 字段即可，`AnimateComponent` 自动切换：
-
-```gdscript
-# AnimateComponent API
-var anim := entity.get_component("Animate Component") as AnimateComponent
-
-anim.play_animation("walk")                          # 切换状态
-anim.set_direction(GlobalEnums.Direction.EAST)       # 切换朝向
-anim.set_variant("elite")                            # 切换变体
-```
-
-### 手动使用（自定义渲染器）
+### 自定义渲染器
 
 ```gdscript
 var helper := SpriteDataHelper.new(sprite_data)
