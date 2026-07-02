@@ -31,7 +31,7 @@ func _enter_tree() -> void:
 
 
 func _register_project_settings() -> void:
-	var setting_name := "sprite_importer/max_atlas_width"
+	var setting_name := "addons/sprite_importer/max_atlas_width"
 	if not ProjectSettings.has_setting(setting_name):
 		ProjectSettings.set_setting(setting_name, 1024)
 	ProjectSettings.set_initial_value(setting_name, 1024)

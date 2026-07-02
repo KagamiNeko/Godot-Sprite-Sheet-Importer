@@ -125,7 +125,7 @@ static func generate(data: Dictionary, png_path: String) -> Error:
 	var max_chars_per_line := max(1, (tile_w - 4) / (_CHAR_W + _CHAR_SPACING))
 
 	# ---- 按 JSON 坐标精准绘制（与导入插件读取坐标一致）----
-	var max_atlas_w: int = ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024)
+	var max_atlas_w: int = ProjectSettings.get_setting("addons/sprite_importer/max_atlas_width", 1024)
 	var cols_per_row: int = max(1, max_atlas_w / tile_w)
 
 	# 第一遍：收集图块 + 计算图集尺寸

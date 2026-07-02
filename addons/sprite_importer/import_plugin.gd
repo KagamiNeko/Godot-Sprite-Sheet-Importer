@@ -119,7 +119,7 @@ func _import(
 	sprite_data.variants = variants.duplicate(true)
 
 	var tile_h: int = grid.y * (2 if is_double else 1)
-	var cols_per_row: int = max(1, ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024) / grid.x)
+	var cols_per_row: int = max(1, ProjectSettings.get_setting("addons/sprite_importer/max_atlas_width", 1024) / grid.x)
 
 	# 6. 预建所有 AtlasTexture 帧（支持逐帧跨行换行）
 	for state_name: String in states:

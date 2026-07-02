@@ -1002,7 +1002,7 @@ func _auto_layout_states() -> void:
 		dir_names.append(dn.strip_edges() if dn is String else str(dn))
 
 	var grid_w: int = _data["atlas"]["grid_size"][0]
-	var max_atlas_w: int = ProjectSettings.get_setting("sprite_importer/max_atlas_width", 1024)
+	var max_atlas_w: int = ProjectSettings.get_setting("addons/sprite_importer/max_atlas_width", 1024)
 	var cols_per_row: int = max(1, max_atlas_w / grid_w)
 
 	var variants: Dictionary = _data["variants"]
